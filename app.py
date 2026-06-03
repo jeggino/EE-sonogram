@@ -5,7 +5,7 @@ import io
 from scipy.signal import stft
 import plotly.express as px
 
-st.title("Interactive Bat Sonogram (Call-focused, Optimized)")
+st.title("Interactive Bat Sonogram (Optimized + Call-Focused)")
 
 uploaded_file = st.file_uploader("Upload ultrasonic audio", type=["wav", "flac", "mp3"])
 
@@ -27,7 +27,7 @@ if uploaded_file:
     min_khz = st.slider("Min frequency (kHz)", 5, 80, 15)
     max_khz = st.slider("Max frequency (kHz)", int(min_khz), int(sr / 2000), 120)
 
-    # STFT resolution (smaller = fewer points)
+    # STFT resolution
     n_fft = st.slider("FFT window size", 256, 4096, 1024, step=256)
     hop = st.slider("Hop length", 64, n_fft - 64, 256, step=64)
 
@@ -37,12 +37,8 @@ if uploaded_file:
     S_db = 20 * np.log10(S + 1e-12)
 
     # ---------------- Time window limit ----------------
-    total_time = float(t[-1]) if len(t) > 0 else 0.0
-    if total_time == 0:
-        st.error("Audio too short or STFT failed.")
-        st.stop()
-
-    max_time = st.slider("Max time window (s)", 0.1, max(0.2, total_time), min(5.0, total_time))
+    total_time = float(t[-1])
+    max_time = st.slider("Max time window (s)", 0.1, total_time, min(5.0, total_time))
     time_mask = t <= max_time
 
     t_sel = t[time_mask]
@@ -62,20 +58,26 @@ if uploaded_file:
     freq_vals = F.flatten()
     amp_vals = S_db_sel.flatten()
 
+    # ---------------- Amplitude filtering ----------------
+    st.subheader("Amplitude filtering")
+    amp_cut = st.slider("Minimum amplitude (dB)", -120, 0, -80)
+    amp_mask = amp_vals >= amp_cut
+
+    time_vals = time_vals[amp_mask]
+    freq_vals = freq_vals[amp_mask]
+    amp_vals = amp_vals[amp_mask]
+
     # ---------------- Keep only strongest points ----------------
-    st.subheader("Density control")
     keep_top_percent = st.slider("Keep top (%) strongest points", 1, 50, 10)
     perc = 100 - keep_top_percent
     threshold = np.percentile(amp_vals, perc)
 
-    mask = amp_vals >= threshold
-    time_vals = time_vals[mask]
-    freq_vals = freq_vals[mask]
-    amp_vals = amp_vals[mask]
+    strong_mask = amp_vals >= threshold
+    time_vals = time_vals[strong_mask]
+    freq_vals = freq_vals[strong_mask]
+    amp_vals = amp_vals[strong_mask]
 
-    st.write(f"Points plotted: {len(time_vals):,}")
-
-    # Safety: if still huge, downsample further
+    # ---------------- Safety downsampling ----------------
     max_points = 200_000
     if len(time_vals) > max_points:
         idx = np.random.choice(len(time_vals), max_points, replace=False)
@@ -84,6 +86,8 @@ if uploaded_file:
         amp_vals = amp_vals[idx]
         st.info(f"Downsampled to {max_points:,} points for performance.")
 
+    st.write(f"Points plotted: {len(time_vals):,}")
+
     # ---------------- Plotly scatter sonogram ----------------
     fig = px.scatter(
         x=time_vals,
@@ -91,10 +95,13 @@ if uploaded_file:
         color=amp_vals,
         color_continuous_scale="magma",
         render_mode="webgl",
-        opacity=0.7,
+        opacity=0.6,
         labels={"x": "Time (s)", "y": "Frequency (Hz)", "color": "Amplitude (dB)"},
-        title="Interactive Call-focused Sonogram",
+        title="Interactive Call-Focused Sonogram",
     )
+
+    # Smaller points
+    fig.update_traces(marker=dict(size=2))
 
     fig.update_layout(
         height=700,
@@ -104,6 +111,7 @@ if uploaded_file:
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
 
 
 
