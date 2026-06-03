@@ -24,7 +24,6 @@ y = data.astype(float)
 duration = len(y) / sr
 
 st.write(f"Sample rate: {sr} Hz, duration: {duration:.3f} s")
-st.audio(io.BytesIO(raw), format="audio/wav")
 
 # =========================================================
 # CHUNKING FOR LONG RECORDINGS
@@ -32,25 +31,14 @@ st.audio(io.BytesIO(raw), format="audio/wav")
 chunk_size = 5.0  # seconds per chunk
 num_chunks = int(np.ceil(duration / chunk_size))
 
-st.subheader("⏱️ Chunk navigation")
-chunk_index = st.slider(
-    "Select chunk (5 s each)",
-    0,
-    max(0, num_chunks - 1),
-    0,
-)
-chunk_start = chunk_index * chunk_size
-chunk_end = min(duration, chunk_start + chunk_size)
-
-st.write(f"Showing chunk {chunk_index+1}/{num_chunks}: {chunk_start:.2f}–{chunk_end:.2f} s")
-
-start_sample = int(chunk_start * sr)
-end_sample = int(chunk_end * sr)
-if end_sample <= start_sample:
-    st.error("Selected chunk has no data.")
-    st.stop()
-y_chunk = y[start_sample:end_sample]
-chunk_duration = chunk_end - chunk_start
+chunk_labels = [f"{i+1} chunk" if i == 0 else f"{i+1} chunk" for i in range(num_chunks)]
+# More readable labels:
+chunk_labels = [f"{i+1} chunk" for i in range(num_chunks)]
+chunk_labels[0] = "First chunk"
+if num_chunks > 1:
+    chunk_labels[1] = "Second chunk"
+if num_chunks > 2:
+    chunk_labels[2] = "Third chunk"
 
 # =========================================================
 # LAYOUT
@@ -64,17 +52,25 @@ with col_controls:
 
     # Spectrogram settings
     with st.expander("⚙️ Spectrogram settings", expanded=True):
-
-        # Hard-coded FFT settings (clean UI)
+        # Fixed FFT parameters
         n_fft = 1024
         hop = 256
-        st.write("FFT window size: 1024 (fixed)")
-        st.write("Hop length: 256 (fixed)")
 
-        # Only one time slider now: window start
+        # Chunk selection as selectbox
+        selected_chunk_label = st.selectbox(
+            "Select chunk (5 s each)",
+            chunk_labels,
+            index=0,
+        )
+        chunk_index = chunk_labels.index(selected_chunk_label)
+        chunk_start = chunk_index * chunk_size
+        chunk_end = min(duration, chunk_start + chunk_size)
+
+        st.write(f"Showing {selected_chunk_label}: {chunk_start:.2f}–{chunk_end:.2f} s")
+
+        # Window start within chunk (global time)
         start_min = float(chunk_start)
         start_max = float(chunk_end)
-
         start_time = st.slider(
             "Window start (s, global time)",
             start_min,
@@ -86,37 +82,33 @@ with col_controls:
         min_khz = st.slider("Min frequency (kHz)", 5, 80, 15)
         max_khz = st.slider("Max frequency (kHz)", int(min_khz), int(sr / 2000), 120)
 
+        # Display mode moved here
+        mode = st.radio("Display mode", ["Scatter", "Heatmap"], index=0)
+
     # Amplitude filtering
     with st.expander("🔊 Amplitude filtering", expanded=True):
         amp_cut = st.slider("Minimum amplitude (dB)", -120, 0, -80)
         keep_top_percent = st.slider("Keep top (%) strongest points", 1, 50, 10)
 
-    # Display settings
-    with st.expander("🎨 Display & detection", expanded=True):
-        mode = st.radio("Display mode", ["Scatter", "Heatmap"], index=0)
-        overlay_style = st.selectbox(
-            "Call overlay style",
-            ["None", "Rectangles", "Vertical bars", "Dots"],
-            index=0,
-        )
-        detection_mode = st.selectbox(
-            "Detection mode",
-            ["Threshold-based", "Peak-based"],
-            index=0,
-        )
-
 # =========================================================
 # RIGHT COLUMN – SONOGRAM + INFO
 # =========================================================
 with col_plot:
+    # Extract current chunk
+    start_sample = int(chunk_start * sr)
+    end_sample = int(chunk_end * sr)
+    if end_sample <= start_sample:
+        st.error("Selected chunk has no data.")
+        st.stop()
+    y_chunk = y[start_sample:end_sample]
 
     # ---------- Compute STFT on current chunk ----------
     f, t_local, Zxx = stft(y_chunk, fs=sr, nperseg=n_fft, noverlap=n_fft - hop)
-    t = t_local + chunk_start  # shift to global time
+    t = t_local + chunk_start  # global time
     S = np.abs(Zxx)
     S_db = 20 * np.log10(S + 1e-12)
 
-    # Time window mask (5-second chunk)
+    # Time window = whole chunk (start_time is just a reference marker)
     time_mask = (t >= chunk_start) & (t <= chunk_end)
     t_sel = t[time_mask]
     S_db_sel = S_db[:, time_mask]
@@ -127,6 +119,10 @@ with col_plot:
     freq_mask = (f >= f_min) & (f <= f_max)
     f_sel = f[freq_mask]
     S_db_sel = S_db_sel[freq_mask, :]
+
+    if S_db_sel.size == 0:
+        st.error("No data in selected frequency band.")
+        st.stop()
 
     # ---------- Flatten for scatter ----------
     T, F = np.meshgrid(t_sel, f_sel)
@@ -139,6 +135,10 @@ with col_plot:
     time_vals = time_vals[amp_mask]
     freq_vals = freq_vals[amp_mask]
     amp_vals = amp_vals[amp_mask]
+
+    if len(amp_vals) == 0:
+        st.warning("No points above amplitude threshold in this window/band.")
+        st.stop()
 
     # Keep top X%
     perc = 100 - keep_top_percent
@@ -192,84 +192,38 @@ with col_plot:
         yaxis=dict(range=[f_min, f_max]),
     )
 
-    # ---------- Call detection ----------
-    calls = []
-    if overlay_style != "None":
-        energy_time = S_db_sel.mean(axis=0)
-        det_thresh = np.percentile(energy_time, 75)
-        active = energy_time > det_thresh
-
-        if active.any():
-            idx = np.where(active)[0]
-            groups = np.split(idx, np.where(np.diff(idx) != 1)[0] + 1)
-            for g in groups:
-                t_start = t_sel[g[0]]
-                t_end = t_sel[g[-1]]
-
-                if detection_mode == "Peak-based":
-                    sub = S_db_sel[:, g]
-                    peak_idx = np.unravel_index(np.argmax(sub), sub.shape)
-                    peak_f = f_sel[peak_idx[0]]
-                else:
-                    peak_f = (f_min + f_max) / 2
-
-                calls.append(
-                    {
-                        "t_start": t_start,
-                        "t_end": t_end,
-                        "t_center": 0.5 * (t_start + t_end),
-                        "f_peak": peak_f,
-                    }
-                )
-
-        # Draw overlays
-        for c in calls:
-            if overlay_style == "Rectangles":
-                fig.add_shape(
-                    type="rect",
-                    x0=c["t_start"],
-                    x1=c["t_end"],
-                    y0=f_min,
-                    y1=f_max,
-                    line=dict(color="cyan", width=1),
-                    fillcolor="rgba(0,255,255,0.05)",
-                )
-            elif overlay_style == "Vertical bars":
-                fig.add_shape(
-                    type="line",
-                    x0=c["t_start"],
-                    x1=c["t_start"],
-                    y0=f_min,
-                    y1=f_max,
-                    line=dict(color="cyan", width=2),
-                )
-            elif overlay_style == "Dots":
-                fig.add_trace(
-                    go.Scatter(
-                        x=[c["t_center"]],
-                        y=[c["f_peak"]],
-                        mode="markers",
-                        marker=dict(color="cyan", size=6),
-                        showlegend=False,
-                    )
-                )
-
     # ---------- Plot ----------
     fig_container = st.container()
     fig_container.plotly_chart(fig, use_container_width=True)
 
-    # ---------- Side info ----------
+    # ---------- Distance between two points in time ----------
+    st.markdown("### ⏱ Time distance between two points")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        t_a = st.number_input(
+            "Point A time (s)",
+            min_value=float(chunk_start),
+            max_value=float(chunk_end),
+            value=float(chunk_start),
+            step=0.001,
+            format="%.3f",
+        )
+    with col_b:
+        t_b = st.number_input(
+            "Point B time (s)",
+            min_value=float(chunk_start),
+            max_value=float(chunk_end),
+            value=float(chunk_start),
+            step=0.001,
+            format="%.3f",
+        )
+
+    dt = abs(t_b - t_a)
+    st.write(f"Time distance: **{dt:.4f} s**")
+
     st.markdown("### 🔍 Hover info")
     st.write("Hover over points to see time, frequency, and amplitude.")
 
-    st.markdown("### 📡 Detected calls")
-    if calls:
-        for i, c in enumerate(calls, 1):
-            st.write(
-                f"Call {i}: {c['t_start']:.3f}–{c['t_end']:.3f} s, peak ≈ {c['f_peak']/1000:.1f} kHz"
-            )
-    else:
-        st.write("No calls detected in this window/band with current settings.")
 
 
 
