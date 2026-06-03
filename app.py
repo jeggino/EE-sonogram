@@ -14,11 +14,17 @@ if uploaded_file:
     data, sr = sf.read(io.BytesIO(uploaded_file.read()))
     y = data.astype(float)
 
-    # Compute STFT
-    f, t, Zxx = stft(y, fs=sr, nperseg=1024, noverlap=512)
-    S = np.abs(Zxx)
+    st.write(f"Sample rate: {sr} Hz")
+    st.audio(uploaded_file)
 
-    # Convert to dB
+    # STFT parameters
+    st.subheader("Spectrogram settings")
+    n_fft = st.slider("FFT window size", 256, 4096, 1024)
+    hop = st.slider("Hop length", 64, 2048, 256)
+
+    # Compute STFT
+    f, t, Zxx = stft(y, fs=sr, nperseg=n_fft, noverlap=n_fft-hop)
+    S = np.abs(Zxx)
     S_db = 20 * np.log10(S + 1e-12)
 
     # Flatten into scatter points
@@ -29,7 +35,10 @@ if uploaded_file:
         "amp": S_db.flatten()
     }
 
-    # Plotly scatter plot
+    # Frequency zoom
+    max_freq = st.slider("Max frequency (kHz)", 20, int(sr/2000), 120)
+
+    # Plotly scatter
     fig = px.scatter(
         df,
         x="time",
@@ -42,12 +51,13 @@ if uploaded_file:
     )
 
     fig.update_layout(
-        height=600,
+        height=650,
         xaxis_title="Time (s)",
         yaxis_title="Frequency (Hz)",
-        yaxis=dict(range=[0, 120000])  # adjust for bat frequencies
+        yaxis=dict(range=[0, max_freq * 1000])
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
 
 
