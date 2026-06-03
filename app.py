@@ -242,14 +242,14 @@ with col_plot:
 
     plot = fig_container.plotly_chart(fig, use_container_width=True)
 
+    # ---------- Plot + click-to-inspect ----------
+    fig_container = st.empty()
+    fig_container.plotly_chart(fig, use_container_width=True)
+    
     # Click-to-inspect panel (always visible)
     st.markdown("### 🔍 Click-to-inspect")
-    click_data = plot._get_figure().to_dict()  # placeholder to avoid errors if no click
-
-    # Streamlit doesn't expose clickData directly from plotly_chart,
-    # so we use session_state with a custom key via Plotly events in JS normally.
-    # Here we simulate a simple message:
-    st.write("Click a point in the sonogram (hover shows time/freq/amp).")
+    st.write("Hover over any point to see time, frequency, and amplitude.")
+    st.write("Full click-to-inspect requires the 'streamlit-plotly-events' package.")
 
     # Note: true click-to-inspect with live clickData requires a small JS bridge
     # or using streamlit-plotly-events. This is the closest pure-Streamlit core version.
