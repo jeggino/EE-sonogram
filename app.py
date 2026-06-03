@@ -5,7 +5,6 @@ import io
 from scipy.signal import stft
 import plotly.express as px
 import plotly.graph_objects as go
-from streamlit_plotly_events import plotly_events
 
 st.set_page_config(layout="wide")
 st.title("Interactive Bat Sonogram – Pro Interface")
@@ -82,8 +81,18 @@ with col_controls:
         # Display mode
         mode = st.radio("Display mode", ["Scatter", "Heatmap"], index=0)
 
-        # Scatter point size
-        point_size = st.slider("Scatter point size", 1, 10, 2)
+        # Scatter point size only if scatter is selected
+        if mode == "Scatter":
+            point_size = st.slider("Scatter point size", 1, 10, 2)
+        else:
+            point_size = None
+
+        # Colormap dropdown
+        colormap = st.selectbox(
+            "Colormap",
+            ["magma", "viridis", "plasma", "inferno", "cividis"],
+            index=0
+        )
 
     with st.expander("🔊 Amplitude filtering", expanded=True):
         amp_cut = st.slider("Minimum amplitude (dB)", -120, 0, -80)
@@ -146,7 +155,7 @@ with col_plot:
             x=time_vals,
             y=freq_vals,
             color=amp_vals,
-            color_continuous_scale="magma",
+            color_continuous_scale=colormap,
             render_mode="webgl",
             opacity=0.6,
             labels={"x": "Time (s)", "y": "Frequency (Hz)", "color": "Amplitude (dB)"},
@@ -158,7 +167,7 @@ with col_plot:
                 x=t,
                 y=f_sel,
                 z=S_db_sel,
-                colorscale="magma",
+                colorscale=colormap,
                 colorbar=dict(title="Amplitude (dB)"),
             )
         )
@@ -170,46 +179,8 @@ with col_plot:
         yaxis=dict(range=[f_min, f_max]),
     )
 
-    # ---------- CLICK EVENTS FOR DISTANCE MEASUREMENT ----------
-    st.markdown("### ⏱ Measure time distance (click two points)")
-
-    clicked_points = plotly_events(
-        fig,
-        click_event=True,
-        hover_event=False,
-        select_event=False,
-        override_height=700,
-        override_width="100%",
-    )
-
-    if "clicks" not in st.session_state:
-        st.session_state.clicks = []
-
-    if clicked_points:
-        st.session_state.clicks.append(clicked_points[0])
-
-    if len(st.session_state.clicks) > 2:
-        st.session_state.clicks = st.session_state.clicks[-2:]
-
-    # Draw segment if 2 points selected
-    if len(st.session_state.clicks) == 2:
-        x1 = st.session_state.clicks[0]["x"]
-        x2 = st.session_state.clicks[1]["x"]
-        y1 = st.session_state.clicks[0]["y"]
-        y2 = st.session_state.clicks[1]["y"]
-
-        fig.add_shape(
-            type="line",
-            x0=x1, y0=y1,
-            x1=x2, y1=y2,
-            line=dict(color="cyan", width=3),
-        )
-
-        dt = abs(x2 - x1)
-        st.success(f"Time distance: **{dt:.6f} s**")
-
-    # Re-render with segment
     st.plotly_chart(fig, use_container_width=True)
+
 
 
 
