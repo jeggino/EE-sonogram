@@ -13,7 +13,7 @@ st.title("Interactive Bat Sonogram – Pro Interface")
 uploaded_file = st.file_uploader("Upload ultrasonic audio", type=["wav", "flac", "mp3"])
 
 if not uploaded_file:
-    st.info("Upload an ultrasonic recording to begin (works even for long files, explored in 5 s chunks).")
+    st.info("Upload an ultrasonic recording to begin (supports long files, explored in 5 s chunks).")
     st.stop()
 
 raw = uploaded_file.read()
@@ -66,9 +66,16 @@ with col_controls:
         n_fft = st.slider("FFT window size", 256, 4096, 1024, step=256)
         hop = st.slider("Hop length", 64, n_fft - 64, 256, step=64)
 
-        # Time window (sliding within chunk)
-        max_window = max(0.1, min(5.0, float(chunk_duration)))
+        # ---------- SAFE TIME WINDOW SLIDER ----------
+        chunk_len = chunk_duration
+
+        if chunk_len <= 0:
+            st.error("Chunk has no data.")
+            st.stop()
+
+        max_window = max(0.1, min(5.0, float(chunk_len)))
         default_window = min(1.0, max_window)
+
         window_size = st.slider(
             "Time window size (s)",
             0.1,
@@ -76,16 +83,19 @@ with col_controls:
             default_window,
         )
 
-        start_min = chunk_start
-        start_max = chunk_end - window_size
+        start_min = float(chunk_start)
+        start_max = float(chunk_end - window_size)
+
         if start_max < start_min:
             start_max = start_min
+
         start_time = st.slider(
             "Window start (s, global time)",
-            float(start_min),
-            float(start_max),
-            float(start_min),
+            start_min,
+            start_max,
+            start_min,
         )
+
         end_time = start_time + window_size
 
         # Frequency zoom
@@ -117,8 +127,7 @@ with col_controls:
 with col_plot:
     # ---------- Compute STFT on current chunk ----------
     f, t_local, Zxx = stft(y_chunk, fs=sr, nperseg=n_fft, noverlap=n_fft - hop)
-    # Shift time axis to global time
-    t = t_local + chunk_start
+    t = t_local + chunk_start  # shift to global time
     S = np.abs(Zxx)
     S_db = 20 * np.log10(S + 1e-12)
 
@@ -213,7 +222,6 @@ with col_plot:
     # ---------- Call detection ----------
     calls = []
     if overlay_style != "None":
-        # Energy over time in selected band
         energy_time = S_db_sel.mean(axis=0)
         det_thresh = np.percentile(energy_time, 75)
         active = energy_time > det_thresh
@@ -280,10 +288,9 @@ with col_plot:
     fig_container = st.container()
     fig_container.plotly_chart(fig, use_container_width=True)
 
-    # ---------- Side info panels ----------
-    st.markdown("### 🔍 Click / hover info")
-    st.write("Hover over points to see time, frequency, and amplitude in the tooltip.")
-    st.write("For true click-to-inspect, you can later add the 'streamlit-plotly-events' package.")
+    # ---------- Side info ----------
+    st.markdown("### 🔍 Hover info")
+    st.write("Hover over points to see time, frequency, and amplitude.")
 
     st.markdown("### 📡 Detected calls")
     if calls:
@@ -293,6 +300,7 @@ with col_plot:
             )
     else:
         st.write("No calls detected in this window/band with current settings.")
+
 
 
 
