@@ -4,107 +4,134 @@ import soundfile as sf
 import io
 from scipy.signal import stft
 import plotly.express as px
+import plotly.graph_objects as go
 
-st.title("Interactive Bat Sonogram (Optimized + Call-Focused)")
+st.set_page_config(layout="wide")
+st.title("Interactive Bat Sonogram – Pro Interface")
 
+# ---------- File upload ----------
 uploaded_file = st.file_uploader("Upload ultrasonic audio", type=["wav", "flac", "mp3"])
 
-if uploaded_file:
-    # Load audio
-    raw = uploaded_file.read()
-    data, sr = sf.read(io.BytesIO(raw))
-    if data.ndim > 1:
-        data = data.mean(axis=1)
-    y = data.astype(float)
+if not uploaded_file:
+    st.info("Upload a 0–10 second ultrasonic recording to begin.")
+    st.stop()
 
-    st.write(f"Sample rate: {sr} Hz")
-    st.audio(io.BytesIO(raw), format="audio/wav")
+raw = uploaded_file.read()
+data, sr = sf.read(io.BytesIO(raw))
+if data.ndim > 1:
+    data = data.mean(axis=1)
+y = data.astype(float)
+duration = len(y) / sr
 
-    # ---------------- LAYOUT: TWO COLUMNS ----------------
-    col_controls, col_plot = st.columns([1, 2])
+st.write(f"Sample rate: {sr} Hz, duration: {duration:.3f} s")
+st.audio(io.BytesIO(raw), format="audio/wav")
 
-    # =====================================================
-    # LEFT COLUMN — SETTINGS IN DROPDOWN BOXES
-    # =====================================================
-    with col_controls:
+# ---------- Layout ----------
+col_controls, col_plot = st.columns([1, 2])
 
-        with st.expander("⚙️ Spectrogram Settings", expanded=True):
+# =========================================================
+# LEFT COLUMN – CONTROLS
+# =========================================================
+with col_controls:
+    # Spectrogram settings
+    with st.expander("⚙️ Spectrogram settings", expanded=True):
+        n_fft = st.slider("FFT window size", 256, 4096, 1024, step=256)
+        hop = st.slider("Hop length", 64, n_fft - 64, 256, step=64)
 
-            # Call-focused frequency band
-            min_khz = st.slider("Min frequency (kHz)", 5, 80, 15)
-            max_khz = st.slider("Max frequency (kHz)", int(min_khz), int(sr / 2000), 120)
+        # Time window (sliding)
+        window_size = st.slider(
+            "Time window size (s)", 0.1, min(5.0, float(duration)), min(1.0, float(duration))
+        )
+        start_time = st.slider(
+            "Window start (s)",
+            0.0,
+            max(0.0, float(duration) - window_size),
+            0.0,
+        )
+        end_time = start_time + window_size
 
-            # STFT resolution
-            n_fft = st.slider("FFT window size", 256, 4096, 1024, step=256)
-            hop = st.slider("Hop length", 64, n_fft - 64, 256, step=64)
+        # Frequency zoom
+        min_khz = st.slider("Min frequency (kHz)", 5, 80, 15)
+        max_khz = st.slider("Max frequency (kHz)", int(min_khz), int(sr / 2000), 120)
 
-            # Time window
-            # Compute temporary STFT to get total time
-            f_tmp, t_tmp, _ = stft(y, fs=sr, nperseg=n_fft, noverlap=n_fft - hop)
-            total_time = float(t_tmp[-1])
-            max_time = st.slider("Max time window (s)", 0.1, total_time, min(5.0, total_time))
+    # Amplitude filtering
+    with st.expander("🔊 Amplitude filtering", expanded=True):
+        amp_cut = st.slider("Minimum amplitude (dB)", -120, 0, -80)
+        keep_top_percent = st.slider("Keep top (%) strongest points", 1, 50, 10)
 
-        with st.expander("🔊 Amplitude Filtering", expanded=True):
+    # Display settings
+    with st.expander("🎨 Display & detection", expanded=True):
+        mode = st.radio("Display mode", ["Scatter", "Heatmap"], index=0)
+        overlay_style = st.selectbox(
+            "Call overlay style",
+            ["None", "Rectangles", "Vertical bars", "Dots"],
+            index=0,
+        )
+        detection_mode = st.selectbox(
+            "Detection mode",
+            ["Threshold-based", "Peak-based"],
+            index=0,
+        )
 
-            amp_cut = st.slider("Minimum amplitude (dB)", -120, 0, -80)
-            keep_top_percent = st.slider("Keep top (%) strongest points", 1, 50, 10)
+# =========================================================
+# RIGHT COLUMN – SONOGRAM + INSPECT PANEL
+# =========================================================
+with col_plot:
+    # ---------- Compute STFT ----------
+    f, t, Zxx = stft(y, fs=sr, nperseg=n_fft, noverlap=n_fft - hop)
+    S = np.abs(Zxx)
+    S_db = 20 * np.log10(S + 1e-12)
 
-    # =====================================================
-    # RIGHT COLUMN — INTERACTIVE SONOGRAM
-    # =====================================================
-    with col_plot:
+    # Time window mask
+    time_mask = (t >= start_time) & (t <= end_time)
+    t_sel = t[time_mask]
+    if len(t_sel) == 0:
+        st.error("No data in selected time window.")
+        st.stop()
+    S_db_sel = S_db[:, time_mask]
 
-        # ---------------- Compute STFT ----------------
-        f, t, Zxx = stft(y, fs=sr, nperseg=n_fft, noverlap=n_fft - hop)
-        S = np.abs(Zxx)
-        S_db = 20 * np.log10(S + 1e-12)
+    # Frequency zoom mask
+    f_min = min_khz * 1000
+    f_max = max_khz * 1000
+    freq_mask = (f >= f_min) & (f <= f_max)
+    f_sel = f[freq_mask]
+    S_db_sel = S_db_sel[freq_mask, :]
 
-        # ---------------- Time window limit ----------------
-        time_mask = t <= max_time
-        t_sel = t[time_mask]
-        S_db_sel = S_db[:, time_mask]
+    # ---------- Flatten for scatter ----------
+    T, F = np.meshgrid(t_sel, f_sel)
+    time_vals = T.flatten()
+    freq_vals = F.flatten()
+    amp_vals = S_db_sel.flatten()
 
-        # ---------------- Call-focused frequency band ----------------
-        f_min = min_khz * 1000
-        f_max = max_khz * 1000
-        freq_mask = (f >= f_min) & (f <= f_max)
+    # Amplitude filter
+    amp_mask = amp_vals >= amp_cut
+    time_vals = time_vals[amp_mask]
+    freq_vals = freq_vals[amp_mask]
+    amp_vals = amp_vals[amp_mask]
 
-        f_sel = f[freq_mask]
-        S_db_sel = S_db_sel[freq_mask, :]
+    if len(amp_vals) == 0:
+        st.warning("No points above amplitude threshold in this window/band.")
+        st.stop()
 
-        # ---------------- Flatten to scatter points ----------------
-        T, F = np.meshgrid(t_sel, f_sel)
-        time_vals = T.flatten()
-        freq_vals = F.flatten()
-        amp_vals = S_db_sel.flatten()
+    # Keep top X% strongest
+    perc = 100 - keep_top_percent
+    threshold = np.percentile(amp_vals, perc)
+    strong_mask = amp_vals >= threshold
+    time_vals = time_vals[strong_mask]
+    freq_vals = freq_vals[strong_mask]
+    amp_vals = amp_vals[strong_mask]
 
-        # ---------------- Amplitude filtering ----------------
-        amp_mask = amp_vals >= amp_cut
-        time_vals = time_vals[amp_mask]
-        freq_vals = freq_vals[amp_mask]
-        amp_vals = amp_vals[amp_mask]
+    # Safety downsampling
+    max_points = 200_000
+    if len(time_vals) > max_points:
+        idx = np.random.choice(len(time_vals), max_points, replace=False)
+        time_vals = time_vals[idx]
+        freq_vals = freq_vals[idx]
+        amp_vals = amp_vals[idx]
+        st.info(f"Downsampled to {max_points:,} points for performance.")
 
-        # ---------------- Keep only strongest points ----------------
-        perc = 100 - keep_top_percent
-        threshold = np.percentile(amp_vals, perc)
-
-        strong_mask = amp_vals >= threshold
-        time_vals = time_vals[strong_mask]
-        freq_vals = freq_vals[strong_mask]
-        amp_vals = amp_vals[strong_mask]
-
-        # ---------------- Safety downsampling ----------------
-        max_points = 200_000
-        if len(time_vals) > max_points:
-            idx = np.random.choice(len(time_vals), max_points, replace=False)
-            time_vals = time_vals[idx]
-            freq_vals = freq_vals[idx]
-            amp_vals = amp_vals[idx]
-            st.info(f"Downsampled to {max_points:,} points for performance.")
-
-        st.write(f"Points plotted: {len(time_vals):,}")
-
-        # ---------------- Plotly scatter sonogram ----------------
+    # ---------- Base figure ----------
+    if mode == "Scatter":
         fig = px.scatter(
             x=time_vals,
             y=freq_vals,
@@ -115,18 +142,129 @@ if uploaded_file:
             labels={"x": "Time (s)", "y": "Frequency (Hz)", "color": "Amplitude (dB)"},
             title="Interactive Call-Focused Sonogram",
         )
-
-        # Smaller points
         fig.update_traces(marker=dict(size=2))
-
+    else:
+        # Heatmap mode
+        fig = go.Figure(
+            data=go.Heatmap(
+                x=t_sel,
+                y=f_sel,
+                z=S_db_sel,
+                colorscale="magma",
+                colorbar=dict(title="Amplitude (dB)"),
+            )
+        )
         fig.update_layout(
-            height=700,
+            title="Heatmap Sonogram",
             xaxis_title="Time (s)",
             yaxis_title="Frequency (Hz)",
-            yaxis=dict(range=[f_min, f_max]),
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+    fig.update_layout(
+        height=700,
+        xaxis_title="Time (s)",
+        yaxis_title="Frequency (Hz)",
+        yaxis=dict(range=[f_min, f_max]),
+    )
+
+    # ---------- Call detection ----------
+    calls = []
+    if overlay_style != "None":
+        # Work on S_db_sel (freq x time)
+        # Simple energy measure over freq band
+        energy_time = S_db_sel.mean(axis=0)
+
+        # Threshold for detection
+        det_thresh = np.percentile(energy_time, 75)
+        active = energy_time > det_thresh
+
+        # Find contiguous active regions
+        if active.any():
+            idx = np.where(active)[0]
+            groups = np.split(idx, np.where(np.diff(idx) != 1)[0] + 1)
+            for g in groups:
+                if len(g) == 0:
+                    continue
+                t_start = t_sel[g[0]]
+                t_end = t_sel[g[-1]]
+                # Peak-based: find peak freq in this time region
+                if detection_mode == "Peak-based":
+                    sub = S_db_sel[:, g]
+                    peak_idx = np.unravel_index(np.argmax(sub), sub.shape)
+                    peak_f = f_sel[peak_idx[0]]
+                else:
+                    peak_f = (f_min + f_max) / 2
+                calls.append(
+                    {
+                        "t_start": t_start,
+                        "t_end": t_end,
+                        "t_center": 0.5 * (t_start + t_end),
+                        "f_peak": peak_f,
+                    }
+                )
+
+        # Overlay drawing
+        for c in calls:
+            if overlay_style == "Rectangles":
+                fig.add_shape(
+                    type="rect",
+                    x0=c["t_start"],
+                    x1=c["t_end"],
+                    y0=f_min,
+                    y1=f_max,
+                    line=dict(color="cyan", width=1),
+                    fillcolor="rgba(0,255,255,0.05)",
+                )
+            elif overlay_style == "Vertical bars":
+                fig.add_shape(
+                    type="line",
+                    x0=c["t_start"],
+                    x1=c["t_start"],
+                    y0=f_min,
+                    y1=f_max,
+                    line=dict(color="cyan", width=2),
+                )
+            elif overlay_style == "Dots":
+                fig.add_trace(
+                    go.Scatter(
+                        x=[c["t_center"]],
+                        y=[c["f_peak"]],
+                        mode="markers",
+                        marker=dict(color="cyan", size=6),
+                        name="Call peak",
+                        showlegend=False,
+                    )
+                )
+
+    # ---------- Plot + click-to-inspect ----------
+    click = st.empty()
+    fig_container = st.empty()
+
+    plot = fig_container.plotly_chart(fig, use_container_width=True)
+
+    # Click-to-inspect panel (always visible)
+    st.markdown("### 🔍 Click-to-inspect")
+    click_data = plot._get_figure().to_dict()  # placeholder to avoid errors if no click
+
+    # Streamlit doesn't expose clickData directly from plotly_chart,
+    # so we use session_state with a custom key via Plotly events in JS normally.
+    # Here we simulate a simple message:
+    st.write("Click a point in the sonogram (hover shows time/freq/amp).")
+
+    # Note: true click-to-inspect with live clickData requires a small JS bridge
+    # or using streamlit-plotly-events. This is the closest pure-Streamlit core version.
+
+    # Show detected calls summary
+    if calls:
+        st.markdown("### 📡 Detected calls")
+        for i, c in enumerate(calls, 1):
+            st.write(
+                f"Call {i}: {c['t_start']:.3f}–{c['t_end']:.3f} s, peak ≈ {c['f_peak']/1000:.1f} kHz"
+            )
+    else:
+        st.markdown("### 📡 Detected calls")
+        st.write("No calls detected in this window/band with current settings.")
+
 
 
 
