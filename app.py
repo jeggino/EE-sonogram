@@ -5,6 +5,7 @@ import io
 from scipy.signal import stft
 import plotly.express as px
 import plotly.graph_objects as go
+from streamlit_plotly_events import plotly_events
 
 st.set_page_config(layout="wide")
 st.title("Interactive Bat Sonogram – Pro Interface")
@@ -26,19 +27,22 @@ duration = len(y) / sr
 st.write(f"Sample rate: {sr} Hz, duration: {duration:.3f} s")
 
 # =========================================================
-# CHUNKING FOR LONG RECORDINGS
+# CHUNKING
 # =========================================================
-chunk_size = 5.0  # seconds per chunk
+chunk_size = 5.0
 num_chunks = int(np.ceil(duration / chunk_size))
 
-chunk_labels = [f"{i+1} chunk" if i == 0 else f"{i+1} chunk" for i in range(num_chunks)]
-# More readable labels:
-chunk_labels = [f"{i+1} chunk" for i in range(num_chunks)]
-chunk_labels[0] = "First chunk"
-if num_chunks > 1:
-    chunk_labels[1] = "Second chunk"
-if num_chunks > 2:
-    chunk_labels[2] = "Third chunk"
+# Human-readable chunk names
+chunk_labels = []
+for i in range(num_chunks):
+    if i == 0:
+        chunk_labels.append("First chunk")
+    elif i == 1:
+        chunk_labels.append("Second chunk")
+    elif i == 2:
+        chunk_labels.append("Third chunk")
+    else:
+        chunk_labels.append(f"{i+1} chunk")
 
 # =========================================================
 # LAYOUT
@@ -50,13 +54,13 @@ col_controls, col_plot = st.columns([1, 2])
 # =========================================================
 with col_controls:
 
-    # Spectrogram settings
     with st.expander("⚙️ Spectrogram settings", expanded=True):
+
         # Fixed FFT parameters
         n_fft = 1024
         hop = 256
 
-        # Chunk selection as selectbox
+        # Chunk selector
         selected_chunk_label = st.selectbox(
             "Select chunk (5 s each)",
             chunk_labels,
@@ -68,64 +72,42 @@ with col_controls:
 
         st.write(f"Showing {selected_chunk_label}: {chunk_start:.2f}–{chunk_end:.2f} s")
 
-        # Window start within chunk (global time)
-        start_min = float(chunk_start)
-        start_max = float(chunk_end)
-        start_time = st.slider(
-            "Window start (s, global time)",
-            start_min,
-            start_max,
-            start_min,
-        )
-
         # Frequency zoom
         min_khz = st.slider("Min frequency (kHz)", 5, 80, 15)
         max_khz = st.slider("Max frequency (kHz)", int(min_khz), int(sr / 2000), 120)
 
-        # Display mode moved here
+        # Display mode
         mode = st.radio("Display mode", ["Scatter", "Heatmap"], index=0)
 
-    # Amplitude filtering
     with st.expander("🔊 Amplitude filtering", expanded=True):
         amp_cut = st.slider("Minimum amplitude (dB)", -120, 0, -80)
         keep_top_percent = st.slider("Keep top (%) strongest points", 1, 50, 10)
 
 # =========================================================
-# RIGHT COLUMN – SONOGRAM + INFO
+# RIGHT COLUMN – SONOGRAM
 # =========================================================
 with col_plot:
-    # Extract current chunk
+
+    # Extract chunk
     start_sample = int(chunk_start * sr)
     end_sample = int(chunk_end * sr)
-    if end_sample <= start_sample:
-        st.error("Selected chunk has no data.")
-        st.stop()
     y_chunk = y[start_sample:end_sample]
 
-    # ---------- Compute STFT on current chunk ----------
+    # ---------- STFT ----------
     f, t_local, Zxx = stft(y_chunk, fs=sr, nperseg=n_fft, noverlap=n_fft - hop)
-    t = t_local + chunk_start  # global time
+    t = t_local + chunk_start
     S = np.abs(Zxx)
     S_db = 20 * np.log10(S + 1e-12)
 
-    # Time window = whole chunk (start_time is just a reference marker)
-    time_mask = (t >= chunk_start) & (t <= chunk_end)
-    t_sel = t[time_mask]
-    S_db_sel = S_db[:, time_mask]
-
-    # Frequency zoom mask
+    # Frequency mask
     f_min = min_khz * 1000
     f_max = max_khz * 1000
     freq_mask = (f >= f_min) & (f <= f_max)
     f_sel = f[freq_mask]
-    S_db_sel = S_db_sel[freq_mask, :]
+    S_db_sel = S_db[freq_mask, :]
 
-    if S_db_sel.size == 0:
-        st.error("No data in selected frequency band.")
-        st.stop()
-
-    # ---------- Flatten for scatter ----------
-    T, F = np.meshgrid(t_sel, f_sel)
+    # Flatten for scatter
+    T, F = np.meshgrid(t, f_sel)
     time_vals = T.flatten()
     freq_vals = F.flatten()
     amp_vals = S_db_sel.flatten()
@@ -136,10 +118,6 @@ with col_plot:
     freq_vals = freq_vals[amp_mask]
     amp_vals = amp_vals[amp_mask]
 
-    if len(amp_vals) == 0:
-        st.warning("No points above amplitude threshold in this window/band.")
-        st.stop()
-
     # Keep top X%
     perc = 100 - keep_top_percent
     threshold = np.percentile(amp_vals, perc)
@@ -148,7 +126,7 @@ with col_plot:
     freq_vals = freq_vals[strong_mask]
     amp_vals = amp_vals[strong_mask]
 
-    # Downsample if needed
+    # Downsample
     max_points = 200_000
     if len(time_vals) > max_points:
         idx = np.random.choice(len(time_vals), max_points, replace=False)
@@ -156,7 +134,7 @@ with col_plot:
         freq_vals = freq_vals[idx]
         amp_vals = amp_vals[idx]
 
-    # ---------- Base figure ----------
+    # ---------- Build figure ----------
     if mode == "Scatter":
         fig = px.scatter(
             x=time_vals,
@@ -166,23 +144,17 @@ with col_plot:
             render_mode="webgl",
             opacity=0.6,
             labels={"x": "Time (s)", "y": "Frequency (Hz)", "color": "Amplitude (dB)"},
-            title="Interactive Call-Focused Sonogram",
         )
         fig.update_traces(marker=dict(size=2))
     else:
         fig = go.Figure(
             data=go.Heatmap(
-                x=t_sel,
+                x=t,
                 y=f_sel,
                 z=S_db_sel,
                 colorscale="magma",
                 colorbar=dict(title="Amplitude (dB)"),
             )
-        )
-        fig.update_layout(
-            title="Heatmap Sonogram",
-            xaxis_title="Time (s)",
-            yaxis_title="Frequency (Hz)",
         )
 
     fig.update_layout(
@@ -192,37 +164,50 @@ with col_plot:
         yaxis=dict(range=[f_min, f_max]),
     )
 
-    # ---------- Plot ----------
-    fig_container = st.container()
-    fig_container.plotly_chart(fig, use_container_width=True)
+    # ---------- CLICK EVENTS FOR DISTANCE MEASUREMENT ----------
+    st.markdown("### ⏱ Measure time distance (click two points)")
 
-    # ---------- Distance between two points in time ----------
-    st.markdown("### ⏱ Time distance between two points")
-    col_a, col_b = st.columns(2)
-    with col_a:
-        t_a = st.number_input(
-            "Point A time (s)",
-            min_value=float(chunk_start),
-            max_value=float(chunk_end),
-            value=float(chunk_start),
-            step=0.001,
-            format="%.3f",
+    clicked_points = plotly_events(
+        fig,
+        click_event=True,
+        hover_event=False,
+        select_event=False,
+        override_height=700,
+        override_width="100%",
+    )
+
+    # Store clicks in session_state
+    if "clicks" not in st.session_state:
+        st.session_state.clicks = []
+
+    if clicked_points:
+        st.session_state.clicks.append(clicked_points[0])
+
+    # Keep only last 2 clicks
+    if len(st.session_state.clicks) > 2:
+        st.session_state.clicks = st.session_state.clicks[-2:]
+
+    # Draw segment if 2 points selected
+    if len(st.session_state.clicks) == 2:
+        x1 = st.session_state.clicks[0]["x"]
+        x2 = st.session_state.clicks[1]["x"]
+        y1 = st.session_state.clicks[0]["y"]
+        y2 = st.session_state.clicks[1]["y"]
+
+        # Add line to figure
+        fig.add_shape(
+            type="line",
+            x0=x1, y0=y1,
+            x1=x2, y1=y2,
+            line=dict(color="cyan", width=3),
         )
-    with col_b:
-        t_b = st.number_input(
-            "Point B time (s)",
-            min_value=float(chunk_start),
-            max_value=float(chunk_end),
-            value=float(chunk_start),
-            step=0.001,
-            format="%.3f",
-        )
 
-    dt = abs(t_b - t_a)
-    st.write(f"Time distance: **{dt:.4f} s**")
+        dt = abs(x2 - x1)
+        st.success(f"Time distance: **{dt:.6f} s**")
 
-    st.markdown("### 🔍 Hover info")
-    st.write("Hover over points to see time, frequency, and amplitude.")
+    # Re-render with segment
+    st.plotly_chart(fig, use_container_width=True)
+
 
 
 
