@@ -1,88 +1,53 @@
 import streamlit as st
-import librosa
-import librosa.display
-import matplotlib.pyplot as plt
 import numpy as np
 import soundfile as sf
 import io
+import plotly.express as px
+from scipy.signal import stft
 
-st.title("Bat Sonogram Analyzer (No Supabase)")
+st.title("Interactive Bat Sonogram (Scatter Plot)")
 
-uploaded_file = st.file_uploader("Upload a bat audio file", type=["wav", "mp3", "flac"])
+uploaded_file = st.file_uploader("Upload audio", type=["wav", "flac", "mp3"])
 
 if uploaded_file:
-    # Load audio safely for Streamlit Cloud
+    # Load audio
     data, sr = sf.read(io.BytesIO(uploaded_file.read()))
     y = data.astype(float)
 
-    st.write(f"Sample rate: {sr} Hz")
-    st.audio(uploaded_file)
+    # Compute STFT
+    f, t, Zxx = stft(y, fs=sr, nperseg=1024, noverlap=512)
+    S = np.abs(Zxx)
 
-    # Spectrogram settings
-    st.subheader("Spectrogram settings")
-    n_fft = st.slider("FFT window size", 256, 4096, 1024)
-    hop_length = st.slider("Hop length", 64, 1024, 256)
-    max_freq_khz = st.slider("Max frequency (kHz)", 20, int(sr / 2000), 120)
+    # Convert to dB
+    S_db = 20 * np.log10(S + 1e-12)
 
-    # Compute spectrogram
-    S = librosa.stft(y, n_fft=n_fft, hop_length=hop_length)
-    S_mag = np.abs(S)
-    S_db = librosa.amplitude_to_db(S_mag, ref=np.max)
+    # Flatten into scatter points
+    T, F = np.meshgrid(t, f)
+    df = {
+        "time": T.flatten(),
+        "freq": F.flatten(),
+        "amp": S_db.flatten()
+    }
 
-    fig, ax = plt.subplots(figsize=(10, 5))
-    librosa.display.specshow(
-        S_db,
-        sr=sr,
-        hop_length=hop_length,
-        x_axis="time",
-        y_axis="hz",
-        cmap="magma",
-        ax=ax,
+    # Plotly scatter plot
+    fig = px.scatter(
+        df,
+        x="time",
+        y="freq",
+        color="amp",
+        color_continuous_scale="magma",
+        render_mode="webgl",
+        opacity=0.7,
+        title="Interactive Sonogram"
     )
-    ax.set_ylim(0, max_freq_khz * 1000)
-    ax.set_title("Spectrogram")
-    st.pyplot(fig)
-    plt.close(fig)
 
-    # Automatic call detection
-    st.subheader("Automatic call detection")
+    fig.update_layout(
+        height=600,
+        xaxis_title="Time (s)",
+        yaxis_title="Frequency (Hz)",
+        yaxis=dict(range=[0, 120000])  # adjust for bat frequencies
+    )
 
-    min_khz = st.slider("Min frequency (kHz)", 5, int(max_freq_khz), 15)
-    max_khz = st.slider("Max frequency (kHz)", int(min_khz), int(max_freq_khz), 120)
+    st.plotly_chart(fig, use_container_width=True)
 
-    freqs = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
-    band_mask = (freqs >= min_khz * 1000) & (freqs <= max_khz * 1000)
-
-    band_energy = S_mag[band_mask, :].mean(axis=0)
-
-    threshold_factor = st.slider("Threshold factor", 1.0, 10.0, 3.0)
-    threshold = threshold_factor * np.median(band_energy)
-
-    call_frames = band_energy > threshold
-
-    calls = []
-    in_call = False
-    start_idx = None
-
-    for i, is_call in enumerate(call_frames):
-        if is_call and not in_call:
-            in_call = True
-            start_idx = i
-        elif not is_call and in_call:
-            in_call = False
-            end_idx = i
-            calls.append((start_idx, end_idx))
-
-    if in_call and start_idx is not None:
-        calls.append((start_idx, len(call_frames)))
-
-    times = librosa.frames_to_time(np.arange(len(call_frames)), sr=sr, hop_length=hop_length)
-
-    st.write(f"Detected calls: {len(calls)}")
-
-    for idx, (s_idx, e_idx) in enumerate(calls, start=1):
-        start_time = times[s_idx]
-        end_time = times[e_idx - 1] if e_idx - 1 < len(times) else times[-1]
-        duration = end_time - start_time
-        st.write(f"Call {idx}: {start_time:.3f}s – {end_time:.3f}s (duration {duration:.3f}s)")
 
