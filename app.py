@@ -13,7 +13,7 @@ st.title("Interactive Bat Sonogram – Pro Interface")
 uploaded_file = st.file_uploader("Upload ultrasonic audio", type=["wav", "flac", "mp3"])
 
 if not uploaded_file:
-    st.info("Upload a 0–10 second ultrasonic recording to begin.")
+    st.info("Upload an ultrasonic recording to begin (works even for long files, explored in 5 s chunks).")
     st.stop()
 
 raw = uploaded_file.read()
@@ -26,7 +26,35 @@ duration = len(y) / sr
 st.write(f"Sample rate: {sr} Hz, duration: {duration:.3f} s")
 st.audio(io.BytesIO(raw), format="audio/wav")
 
-# ---------- Layout ----------
+# =========================================================
+# CHUNKING FOR LONG RECORDINGS
+# =========================================================
+chunk_size = 5.0  # seconds per chunk
+num_chunks = int(np.ceil(duration / chunk_size))
+
+st.subheader("⏱️ Chunk navigation")
+chunk_index = st.slider(
+    "Select chunk (5 s each)",
+    0,
+    max(0, num_chunks - 1),
+    0,
+)
+chunk_start = chunk_index * chunk_size
+chunk_end = min(duration, chunk_start + chunk_size)
+
+st.write(f"Showing chunk {chunk_index+1}/{num_chunks}: {chunk_start:.2f}–{chunk_end:.2f} s")
+
+start_sample = int(chunk_start * sr)
+end_sample = int(chunk_end * sr)
+if end_sample <= start_sample:
+    st.error("Selected chunk has no data.")
+    st.stop()
+y_chunk = y[start_sample:end_sample]
+chunk_duration = chunk_end - chunk_start
+
+# =========================================================
+# LAYOUT
+# =========================================================
 col_controls, col_plot = st.columns([1, 2])
 
 # =========================================================
@@ -38,15 +66,25 @@ with col_controls:
         n_fft = st.slider("FFT window size", 256, 4096, 1024, step=256)
         hop = st.slider("Hop length", 64, n_fft - 64, 256, step=64)
 
-        # Time window (sliding)
+        # Time window (sliding within chunk)
+        max_window = max(0.1, min(5.0, float(chunk_duration)))
+        default_window = min(1.0, max_window)
         window_size = st.slider(
-            "Time window size (s)", 0.1, min(5.0, float(duration)), min(1.0, float(duration))
+            "Time window size (s)",
+            0.1,
+            max_window,
+            default_window,
         )
+
+        start_min = chunk_start
+        start_max = chunk_end - window_size
+        if start_max < start_min:
+            start_max = start_min
         start_time = st.slider(
-            "Window start (s)",
-            0.0,
-            max(0.0, float(duration) - window_size),
-            0.0,
+            "Window start (s, global time)",
+            float(start_min),
+            float(start_max),
+            float(start_min),
         )
         end_time = start_time + window_size
 
@@ -74,11 +112,13 @@ with col_controls:
         )
 
 # =========================================================
-# RIGHT COLUMN – SONOGRAM + INSPECT PANEL
+# RIGHT COLUMN – SONOGRAM + INFO
 # =========================================================
 with col_plot:
-    # ---------- Compute STFT ----------
-    f, t, Zxx = stft(y, fs=sr, nperseg=n_fft, noverlap=n_fft - hop)
+    # ---------- Compute STFT on current chunk ----------
+    f, t_local, Zxx = stft(y_chunk, fs=sr, nperseg=n_fft, noverlap=n_fft - hop)
+    # Shift time axis to global time
+    t = t_local + chunk_start
     S = np.abs(Zxx)
     S_db = 20 * np.log10(S + 1e-12)
 
@@ -96,6 +136,10 @@ with col_plot:
     freq_mask = (f >= f_min) & (f <= f_max)
     f_sel = f[freq_mask]
     S_db_sel = S_db_sel[freq_mask, :]
+
+    if S_db_sel.size == 0:
+        st.error("No data in selected frequency band.")
+        st.stop()
 
     # ---------- Flatten for scatter ----------
     T, F = np.meshgrid(t_sel, f_sel)
@@ -144,7 +188,6 @@ with col_plot:
         )
         fig.update_traces(marker=dict(size=2))
     else:
-        # Heatmap mode
         fig = go.Figure(
             data=go.Heatmap(
                 x=t_sel,
@@ -170,15 +213,11 @@ with col_plot:
     # ---------- Call detection ----------
     calls = []
     if overlay_style != "None":
-        # Work on S_db_sel (freq x time)
-        # Simple energy measure over freq band
+        # Energy over time in selected band
         energy_time = S_db_sel.mean(axis=0)
-
-        # Threshold for detection
         det_thresh = np.percentile(energy_time, 75)
         active = energy_time > det_thresh
 
-        # Find contiguous active regions
         if active.any():
             idx = np.where(active)[0]
             groups = np.split(idx, np.where(np.diff(idx) != 1)[0] + 1)
@@ -187,13 +226,14 @@ with col_plot:
                     continue
                 t_start = t_sel[g[0]]
                 t_end = t_sel[g[-1]]
-                # Peak-based: find peak freq in this time region
+
                 if detection_mode == "Peak-based":
                     sub = S_db_sel[:, g]
                     peak_idx = np.unravel_index(np.argmax(sub), sub.shape)
                     peak_f = f_sel[peak_idx[0]]
                 else:
                     peak_f = (f_min + f_max) / 2
+
                 calls.append(
                     {
                         "t_start": t_start,
@@ -236,34 +276,24 @@ with col_plot:
                     )
                 )
 
-    # ---------- Plot + click-to-inspect ----------
-    click = st.empty()
-    fig_container = st.empty()
-
-    plot = fig_container.plotly_chart(fig, use_container_width=True)
-
-    # ---------- Plot + click-to-inspect ----------
-    fig_container = st.empty()
+    # ---------- Plot ----------
+    fig_container = st.container()
     fig_container.plotly_chart(fig, use_container_width=True)
-    
-    # Click-to-inspect panel (always visible)
-    st.markdown("### 🔍 Click-to-inspect")
-    st.write("Hover over any point to see time, frequency, and amplitude.")
-    st.write("Full click-to-inspect requires the 'streamlit-plotly-events' package.")
 
-    # Note: true click-to-inspect with live clickData requires a small JS bridge
-    # or using streamlit-plotly-events. This is the closest pure-Streamlit core version.
+    # ---------- Side info panels ----------
+    st.markdown("### 🔍 Click / hover info")
+    st.write("Hover over points to see time, frequency, and amplitude in the tooltip.")
+    st.write("For true click-to-inspect, you can later add the 'streamlit-plotly-events' package.")
 
-    # Show detected calls summary
+    st.markdown("### 📡 Detected calls")
     if calls:
-        st.markdown("### 📡 Detected calls")
         for i, c in enumerate(calls, 1):
             st.write(
                 f"Call {i}: {c['t_start']:.3f}–{c['t_end']:.3f} s, peak ≈ {c['f_peak']/1000:.1f} kHz"
             )
     else:
-        st.markdown("### 📡 Detected calls")
         st.write("No calls detected in this window/band with current settings.")
+
 
 
 
