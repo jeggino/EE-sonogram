@@ -4,7 +4,8 @@ scipy
 matplotlib
 librosa==0.10.1
 soundfile
-supabase-py
 python-dotenv
+
+
 
 
