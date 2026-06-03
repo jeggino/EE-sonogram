@@ -61,33 +61,19 @@ col_controls, col_plot = st.columns([1, 2])
 # LEFT COLUMN – CONTROLS
 # =========================================================
 with col_controls:
+
     # Spectrogram settings
     with st.expander("⚙️ Spectrogram settings", expanded=True):
-        n_fft = st.slider("FFT window size", 256, 4096, 1024, step=256)
-        hop = st.slider("Hop length", 64, n_fft - 64, 256, step=64)
 
-        # ---------- SAFE TIME WINDOW SLIDER ----------
-        chunk_len = chunk_duration
+        # Hard-coded FFT settings (clean UI)
+        n_fft = 1024
+        hop = 256
+        st.write("FFT window size: 1024 (fixed)")
+        st.write("Hop length: 256 (fixed)")
 
-        if chunk_len <= 0:
-            st.error("Chunk has no data.")
-            st.stop()
-
-        max_window = max(0.1, min(5.0, float(chunk_len)))
-        default_window = min(1.0, max_window)
-
-        window_size = st.slider(
-            "Time window size (s)",
-            0.1,
-            max_window,
-            default_window,
-        )
-
+        # Only one time slider now: window start
         start_min = float(chunk_start)
-        start_max = float(chunk_end - window_size)
-
-        if start_max < start_min:
-            start_max = start_min
+        start_max = float(chunk_end)
 
         start_time = st.slider(
             "Window start (s, global time)",
@@ -95,8 +81,6 @@ with col_controls:
             start_max,
             start_min,
         )
-
-        end_time = start_time + window_size
 
         # Frequency zoom
         min_khz = st.slider("Min frequency (kHz)", 5, 80, 15)
@@ -125,18 +109,16 @@ with col_controls:
 # RIGHT COLUMN – SONOGRAM + INFO
 # =========================================================
 with col_plot:
+
     # ---------- Compute STFT on current chunk ----------
     f, t_local, Zxx = stft(y_chunk, fs=sr, nperseg=n_fft, noverlap=n_fft - hop)
     t = t_local + chunk_start  # shift to global time
     S = np.abs(Zxx)
     S_db = 20 * np.log10(S + 1e-12)
 
-    # Time window mask
-    time_mask = (t >= start_time) & (t <= end_time)
+    # Time window mask (5-second chunk)
+    time_mask = (t >= chunk_start) & (t <= chunk_end)
     t_sel = t[time_mask]
-    if len(t_sel) == 0:
-        st.error("No data in selected time window.")
-        st.stop()
     S_db_sel = S_db[:, time_mask]
 
     # Frequency zoom mask
@@ -145,10 +127,6 @@ with col_plot:
     freq_mask = (f >= f_min) & (f <= f_max)
     f_sel = f[freq_mask]
     S_db_sel = S_db_sel[freq_mask, :]
-
-    if S_db_sel.size == 0:
-        st.error("No data in selected frequency band.")
-        st.stop()
 
     # ---------- Flatten for scatter ----------
     T, F = np.meshgrid(t_sel, f_sel)
@@ -162,11 +140,7 @@ with col_plot:
     freq_vals = freq_vals[amp_mask]
     amp_vals = amp_vals[amp_mask]
 
-    if len(amp_vals) == 0:
-        st.warning("No points above amplitude threshold in this window/band.")
-        st.stop()
-
-    # Keep top X% strongest
+    # Keep top X%
     perc = 100 - keep_top_percent
     threshold = np.percentile(amp_vals, perc)
     strong_mask = amp_vals >= threshold
@@ -174,14 +148,13 @@ with col_plot:
     freq_vals = freq_vals[strong_mask]
     amp_vals = amp_vals[strong_mask]
 
-    # Safety downsampling
+    # Downsample if needed
     max_points = 200_000
     if len(time_vals) > max_points:
         idx = np.random.choice(len(time_vals), max_points, replace=False)
         time_vals = time_vals[idx]
         freq_vals = freq_vals[idx]
         amp_vals = amp_vals[idx]
-        st.info(f"Downsampled to {max_points:,} points for performance.")
 
     # ---------- Base figure ----------
     if mode == "Scatter":
@@ -230,8 +203,6 @@ with col_plot:
             idx = np.where(active)[0]
             groups = np.split(idx, np.where(np.diff(idx) != 1)[0] + 1)
             for g in groups:
-                if len(g) == 0:
-                    continue
                 t_start = t_sel[g[0]]
                 t_end = t_sel[g[-1]]
 
@@ -251,7 +222,7 @@ with col_plot:
                     }
                 )
 
-        # Overlay drawing
+        # Draw overlays
         for c in calls:
             if overlay_style == "Rectangles":
                 fig.add_shape(
@@ -279,7 +250,6 @@ with col_plot:
                         y=[c["f_peak"]],
                         mode="markers",
                         marker=dict(color="cyan", size=6),
-                        name="Call peak",
                         showlegend=False,
                     )
                 )
@@ -300,6 +270,7 @@ with col_plot:
             )
     else:
         st.write("No calls detected in this window/band with current settings.")
+
 
 
 
