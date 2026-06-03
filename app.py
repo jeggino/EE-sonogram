@@ -7,7 +7,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 st.set_page_config(layout="wide")
-st.title("Interactive Bat Sonogram – Pro Interface")
+st.image("Copilot_20260604_011145.png",width = "stretch")
 
 # ---------- File upload ----------
 uploaded_file = st.file_uploader("Upload ultrasonic audio", type=["wav", "flac", "mp3"])
