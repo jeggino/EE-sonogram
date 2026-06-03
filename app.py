@@ -72,12 +72,18 @@ with col_controls:
 
         st.write(f"Showing {selected_chunk_label}: {chunk_start:.2f}–{chunk_end:.2f} s")
 
-        # Frequency zoom
-        min_khz = st.slider("Min frequency (kHz)", 5, 80, 15)
-        max_khz = st.slider("Max frequency (kHz)", int(min_khz), int(sr / 2000), 120)
+        # Frequency zoom (range slider)
+        min_khz, max_khz = st.slider(
+            "Frequency range (kHz)",
+            5, int(sr / 2000),
+            (15, 120)
+        )
 
         # Display mode
         mode = st.radio("Display mode", ["Scatter", "Heatmap"], index=0)
+
+        # Scatter point size
+        point_size = st.slider("Scatter point size", 1, 10, 2)
 
     with st.expander("🔊 Amplitude filtering", expanded=True):
         amp_cut = st.slider("Minimum amplitude (dB)", -120, 0, -80)
@@ -145,7 +151,7 @@ with col_plot:
             opacity=0.6,
             labels={"x": "Time (s)", "y": "Frequency (Hz)", "color": "Amplitude (dB)"},
         )
-        fig.update_traces(marker=dict(size=2))
+        fig.update_traces(marker=dict(size=point_size))
     else:
         fig = go.Figure(
             data=go.Heatmap(
@@ -176,14 +182,12 @@ with col_plot:
         override_width="100%",
     )
 
-    # Store clicks in session_state
     if "clicks" not in st.session_state:
         st.session_state.clicks = []
 
     if clicked_points:
         st.session_state.clicks.append(clicked_points[0])
 
-    # Keep only last 2 clicks
     if len(st.session_state.clicks) > 2:
         st.session_state.clicks = st.session_state.clicks[-2:]
 
@@ -194,7 +198,6 @@ with col_plot:
         y1 = st.session_state.clicks[0]["y"]
         y2 = st.session_state.clicks[1]["y"]
 
-        # Add line to figure
         fig.add_shape(
             type="line",
             x0=x1, y0=y1,
@@ -207,6 +210,7 @@ with col_plot:
 
     # Re-render with segment
     st.plotly_chart(fig, use_container_width=True)
+
 
 
 
