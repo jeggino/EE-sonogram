@@ -53,6 +53,13 @@ col_controls, col_plot = st.columns([1, 2])
 # =========================================================
 with col_controls:
 
+    # ---------- Project metadata ----------
+    with st.expander("📄 Project metadata", expanded=True):
+        project_name = st.text_input("Project name", "")
+        project_location = st.text_input("Location & date", "")
+        project_species = st.text_input("Species", "")
+
+    # ---------- Spectrogram settings ----------
     with st.expander("⚙️ Spectrogram settings", expanded=True):
 
         # Fixed FFT parameters
@@ -87,13 +94,14 @@ with col_controls:
         else:
             point_size = None
 
-        # Colormap dropdown
+        # Colormap dropdown (plasma default)
         colormap = st.selectbox(
             "Colormap",
-            ["magma", "viridis", "plasma", "inferno", "cividis"],
+            ["plasma", "magma", "viridis", "inferno", "cividis"],
             index=0
         )
 
+    # ---------- Amplitude filtering ----------
     with st.expander("🔊 Amplitude filtering", expanded=True):
         amp_cut = st.slider("Minimum amplitude (dB)", -120, 0, -80)
         keep_top_percent = st.slider("Keep top (%) strongest points", 1, 50, 10)
@@ -172,7 +180,17 @@ with col_plot:
             )
         )
 
+    # ---------- Dynamic plot titles ----------
+    title_main = project_name if project_name else "Sonogram"
+    title_sub = project_location if project_location else ""
+    title_species = project_species if project_species else ""
+
     fig.update_layout(
+        title=dict(
+            text=f"<b>{title_main}</b><br><sup>{title_sub}</sup><br><sup>{title_species}</sup>",
+            x=0.5,
+            xanchor="center"
+        ),
         height=700,
         xaxis_title="Time (s)",
         yaxis_title="Frequency (Hz)",
@@ -180,6 +198,7 @@ with col_plot:
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
 
 
 
