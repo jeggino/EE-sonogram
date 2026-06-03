@@ -4,7 +4,7 @@ scipy
 matplotlib
 librosa==0.10.1
 soundfile
-numba==0.58.1
 supabase-py
 python-dotenv
+
 
