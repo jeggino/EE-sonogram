@@ -8,8 +8,18 @@ import plotly.graph_objects as go
 from streamlit_plotly_events import plotly_events
 from help_text import HELP_TEXT
 
+st.markdown(
+    """
+    <div style="text-align:center;">
+        <img src="https://raw.githubusercontent.com/yourusername/yourrepo/main/header.png"
+             style="width:100%; max-width:900px;">
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
 st.set_page_config(layout="wide")
-st.title("Interactive Bat Sonogram – Pro Interface")
 
 # ---------------------------------------------------------
 # Helper: restore zoom
