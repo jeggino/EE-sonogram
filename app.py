@@ -354,10 +354,11 @@ with col_controls:
         keep_top_percent = st.slider("Keep top (%) strongest points", 1, 50, 10)
 
 # ---------------------------------------------------------
-# RIGHT COLUMN – SONOGRAM
+# RIGHT COLUMN – SONOGRAM (ZOOM-PRESERVING VERSION)
 # ---------------------------------------------------------
 with col_plot:
 
+    # Compute STFT data (this can change)
     start_sample = int(chunk_start * sr)
     end_sample = int(chunk_end * sr)
     y_chunk = y[start_sample:end_sample]
@@ -373,16 +374,19 @@ with col_plot:
     f_sel = f[freq_mask]
     S_db_sel = S_db[freq_mask, :]
 
+    # Flatten for scatter
     T, F = np.meshgrid(t, f_sel)
     time_vals = T.flatten()
     freq_vals = F.flatten()
     amp_vals = S_db_sel.flatten()
 
+    # Amplitude filtering
     amp_mask = amp_vals >= amp_cut
     time_vals = time_vals[amp_mask]
     freq_vals = freq_vals[amp_mask]
     amp_vals = amp_vals[amp_mask]
 
+    # Keep top X%
     perc = 100 - keep_top_percent
     threshold = np.percentile(amp_vals, perc)
     strong_mask = amp_vals >= threshold
@@ -390,6 +394,7 @@ with col_plot:
     freq_vals = freq_vals[strong_mask]
     amp_vals = amp_vals[strong_mask]
 
+    # Downsample
     max_points = 200_000
     if len(time_vals) > max_points:
         idx = np.random.choice(len(time_vals), max_points, replace=False)
@@ -397,25 +402,40 @@ with col_plot:
         freq_vals = freq_vals[idx]
         amp_vals = amp_vals[idx]
 
+    # ---------------------------------------------------------
+    # FIGURE PERSISTENCE (THIS IS THE FIX)
+    # ---------------------------------------------------------
+    if "fig" not in st.session_state:
+        st.session_state.fig = go.Figure()
+
+    fig = st.session_state.fig
+
+    # Clear previous traces but KEEP layout (keeps zoom)
+    fig.data = []
+
+    # Add new data
     if mode == "Scatter":
-        fig = px.scatter(
-            x=time_vals,
-            y=freq_vals,
-            color=amp_vals,
-            color_continuous_scale=colormap,
-            render_mode="webgl",
-            opacity=0.6,
-            labels={"x": "Time (s)", "y": "Frequency (Hz)", "color": "Amplitude (dB)"},
+        fig.add_trace(
+            go.Scattergl(
+                x=time_vals,
+                y=freq_vals,
+                mode="markers",
+                marker=dict(
+                    size=point_size,
+                    color=amp_vals,
+                    colorscale=colormap,
+                    showscale=True
+                )
+            )
         )
-        fig.update_traces(marker=dict(size=point_size))
     else:
-        fig = go.Figure(
-            data=go.Heatmap(
+        fig.add_trace(
+            go.Heatmap(
                 x=t,
                 y=f_sel,
                 z=S_db_sel,
                 colorscale=colormap,
-                colorbar=dict(title="Amplitude (dB)"),
+                colorbar=dict(title="Amplitude (dB)")
             )
         )
 
@@ -433,35 +453,18 @@ with col_plot:
         height=700,
         xaxis_title="Time (s)",
         yaxis_title="Frequency (Hz)",
-        yaxis=dict(range=[f_min, f_max]),
     )
 
-    # Restore zoom BEFORE rendering
-    fig = restore_zoom(fig)
-
-    # Capture zoom events
-    zoom_event = plotly_events(
+    # ---------------------------------------------------------
+    # SHOW PLOT (ZOOM IS PRESERVED)
+    # ---------------------------------------------------------
+    st.plotly_chart(
         fig,
-        events=["relayout"],
-        key="main_plot",
-        override_height=700,
-        override_width="100%",
+        use_container_width=True,
+        config={"scrollZoom": True},
+        key="main_plot"
     )
 
-    # Save zoom state
-    if zoom_event:
-        relayout = zoom_event[0].get("relayout", {})
-        if "xaxis.range[0]" in relayout and "xaxis.range[1]" in relayout:
-            st.session_state.zoom_state = {
-                "x": [
-                    relayout["xaxis.range[0]"],
-                    relayout["xaxis.range[1]"]
-                ],
-                "y": [
-                    relayout["yaxis.range[0]"],
-                    relayout["yaxis.range[1]"]
-                ]
-            }
 
 
 
