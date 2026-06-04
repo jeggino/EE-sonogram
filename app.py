@@ -16,23 +16,36 @@ IMAGE_URL = "Copilot_20260604_011145.png"
 st.markdown(
     f"""
     <style>
-        /* Target the Streamlit top toolbar */
-        [data-testid="stToolbar"] {{
+        /* Remove Streamlit default header background */
+        header[data-testid="stHeader"] {{
+            background: none;
+        }}
+
+        /* Add your background image */
+        header[data-testid="stHeader"]::before {{
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 60px; /* adjust height */
             background-image: url("{IMAGE_URL}");
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;
-            height: 60px !important; /* adjust depending on your image */
+            z-index: 0;
         }}
 
-        /* Optional: hide Streamlit's default gradient */
-        header[data-testid="stHeader"] {{
-            background: transparent;
+        /* Keep menu buttons clickable */
+        header[data-testid="stHeader"] > div {{
+            position: relative;
+            z-index: 1;
         }}
     </style>
     """,
     unsafe_allow_html=True
 )
+
 
 
 
