@@ -12,25 +12,24 @@ from help_text import HELP_TEXT
 st.set_page_config(layout="wide")
 st.image("Copilot_20260604_011145.png",width = "stretch")
 
-if st.button("ℹ️ How to use the app"):
-    with st.dialog("App Instructions"):
-        # Scrollable container
-        st.markdown(
-            """
-            <div style='
-                height: 70vh;
-                width: 100%;
-                overflow-y: scroll;
-                padding-right: 10px;
-            '>
-            """,
-            unsafe_allow_html=True
-        )
-
-        st.markdown(HELP_TEXT)
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
+@st.dialog("App Instructions")
+def helper():
+    st.markdown(
+        """
+        <div style='
+            height: 70vh;
+            width: 100%;
+            overflow-y: scroll;
+            padding-right: 10px;
+        '>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    st.markdown(HELP_TEXT)
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+    
 
 
 # ---------- File upload ----------
@@ -46,6 +45,10 @@ if data.ndim > 1:
     data = data.mean(axis=1)
 y = data.astype(float)
 duration = len(y) / sr
+
+if st.button("ℹ️ How to use the app"):
+    helper()
+
 
 st.write(f"Sample rate: {sr} Hz, duration: {duration:.3f} s")
 
