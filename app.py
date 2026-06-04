@@ -5,37 +5,32 @@
 # from scipy.signal import stft
 # import plotly.express as px
 # import plotly.graph_objects as go
-
+# from streamlit_plotly_events import plotly_events
 # from help_text import HELP_TEXT
 
-
 # st.set_page_config(layout="wide")
-# st.image("Copilot_20260604_011145.png",width = "stretch")
+# st.title("Interactive Bat Sonogram – Pro Interface")
 
-# @st.dialog(" ")
-# def helper():   
-#     st.markdown(HELP_TEXT)
-
-
+# # ---------------------------------------------------------
+# # Helper: restore zoom
+# # ---------------------------------------------------------
 # def restore_zoom(fig):
 #     zoom = st.session_state.get("zoom_state", None)
 #     if zoom:
-#         if "xaxis.range" in zoom:
-#             fig.update_xaxes(range=zoom["xaxis.range"])
-#         if "yaxis.range" in zoom:
-#             fig.update_yaxes(range=zoom["yaxis.range"])
+#         if "x" in zoom:
+#             fig.update_xaxes(range=zoom["x"])
+#         if "y" in zoom:
+#             fig.update_yaxes(range=zoom["y"])
 #     return fig
 
 
-    
-# if st.button("ℹ️ How to use the app"):
-#     helper()
-
-# # ---------- File upload ----------
+# # ---------------------------------------------------------
+# # File upload
+# # ---------------------------------------------------------
 # uploaded_file = st.file_uploader("Upload ultrasonic audio", type=["wav", "flac", "mp3"])
 
 # if not uploaded_file:
-#     st.info("Upload an ultrasonic recording to begin (supports long files, explored in 5 s chunks).")
+#     st.info("Upload an ultrasonic recording to begin.")
 #     st.stop()
 
 # raw = uploaded_file.read()
@@ -45,18 +40,14 @@
 # y = data.astype(float)
 # duration = len(y) / sr
 
-
-
-
 # st.write(f"Sample rate: {sr} Hz, duration: {duration:.3f} s")
 
-# # =========================================================
-# # CHUNKING
-# # =========================================================
+# # ---------------------------------------------------------
+# # Chunks
+# # ---------------------------------------------------------
 # chunk_size = 5.0
 # num_chunks = int(np.ceil(duration / chunk_size))
 
-# # Human-readable chunk names
 # chunk_labels = []
 # for i in range(num_chunks):
 #     if i == 0:
@@ -68,30 +59,38 @@
 #     else:
 #         chunk_labels.append(f"{i+1} chunk")
 
-# # =========================================================
-# # LAYOUT
-# # =========================================================
+# # ---------------------------------------------------------
+# # Layout
+# # ---------------------------------------------------------
 # col_controls, col_plot = st.columns([1, 2])
 
-# # =========================================================
+# # ---------------------------------------------------------
 # # LEFT COLUMN – CONTROLS
-# # =========================================================
+# # ---------------------------------------------------------
 # with col_controls:
 
-#     # ---------- Project metadata ----------
+#     # Help dialog
+#     if st.button("ℹ️ How to use the app"):
+#         with st.dialog("App Instructions"):
+#             st.markdown(
+#                 "<div style='height:70vh; overflow-y:auto; padding-right:12px;'>",
+#                 unsafe_allow_html=True
+#             )
+#             st.markdown(HELP_TEXT)
+#             st.markdown("</div>", unsafe_allow_html=True)
+
+#     # Metadata
 #     with st.expander("📄 Project metadata", expanded=True):
 #         project_name = st.text_input("Project name", "")
 #         project_location = st.text_input("Location & date", "")
 #         project_species = st.text_input("Species", "")
 
-#     # ---------- Spectrogram settings ----------
+#     # Spectrogram settings
 #     with st.expander("⚙️ Spectrogram settings", expanded=True):
 
-#         # Fixed FFT parameters
 #         n_fft = 1024
 #         hop = 256
 
-#         # Chunk selector
 #         selected_chunk_label = st.selectbox(
 #             "Select chunk (5 s each)",
 #             chunk_labels,
@@ -103,51 +102,45 @@
 
 #         st.write(f"Showing {selected_chunk_label}: {chunk_start:.2f}–{chunk_end:.2f} s")
 
-#         # Frequency zoom (range slider)
 #         min_khz, max_khz = st.slider(
 #             "Frequency range (kHz)",
 #             5, int(sr / 2000),
 #             (15, 120)
 #         )
 
-#         # Display mode
 #         mode = st.radio("Display mode", ["Scatter", "Heatmap"], index=0)
 
-#         # Scatter point size only if scatter is selected
 #         if mode == "Scatter":
 #             point_size = st.slider("Scatter point size", 1, 10, 2)
 #         else:
 #             point_size = None
 
-#         # Colormap dropdown (plasma default)
 #         colormap = st.selectbox(
 #             "Colormap",
 #             ["plasma", "magma", "viridis", "inferno", "cividis"],
 #             index=0
 #         )
 
-#     # ---------- Amplitude filtering ----------
+#     # Amplitude filtering
 #     with st.expander("🔊 Amplitude filtering", expanded=True):
 #         amp_cut = st.slider("Minimum amplitude (dB)", -120, 0, -80)
 #         keep_top_percent = st.slider("Keep top (%) strongest points", 1, 50, 10)
 
-# # =========================================================
-# # RIGHT COLUMN – SONOGRAM
-# # =========================================================
+# # ---------------------------------------------------------
+# # RIGHT COLUMN – SONOGRAM (ZOOM-PRESERVING VERSION)
+# # ---------------------------------------------------------
 # with col_plot:
 
-#     # Extract chunk
+#     # Compute STFT data (this can change)
 #     start_sample = int(chunk_start * sr)
 #     end_sample = int(chunk_end * sr)
 #     y_chunk = y[start_sample:end_sample]
 
-#     # ---------- STFT ----------
 #     f, t_local, Zxx = stft(y_chunk, fs=sr, nperseg=n_fft, noverlap=n_fft - hop)
 #     t = t_local + chunk_start
 #     S = np.abs(Zxx)
 #     S_db = 20 * np.log10(S + 1e-12)
 
-#     # Frequency mask
 #     f_min = min_khz * 1000
 #     f_max = max_khz * 1000
 #     freq_mask = (f >= f_min) & (f <= f_max)
@@ -160,7 +153,7 @@
 #     freq_vals = F.flatten()
 #     amp_vals = S_db_sel.flatten()
 
-#     # Amplitude filter
+#     # Amplitude filtering
 #     amp_mask = amp_vals >= amp_cut
 #     time_vals = time_vals[amp_mask]
 #     freq_vals = freq_vals[amp_mask]
@@ -182,30 +175,44 @@
 #         freq_vals = freq_vals[idx]
 #         amp_vals = amp_vals[idx]
 
-#     # ---------- Build figure ----------
+#     # ---------------------------------------------------------
+#     # FIGURE PERSISTENCE (THIS IS THE FIX)
+#     # ---------------------------------------------------------
+#     if "fig" not in st.session_state:
+#         st.session_state.fig = go.Figure()
+
+#     fig = st.session_state.fig
+
+#     # Clear previous traces but KEEP layout (keeps zoom)
+#     fig.data = []
+
+#     # Add new data
 #     if mode == "Scatter":
-#         fig = px.scatter(
-#             x=time_vals,
-#             y=freq_vals,
-#             color=amp_vals,
-#             color_continuous_scale=colormap,
-#             render_mode="webgl",
-#             opacity=0.6,
-#             labels={"x": "Time (s)", "y": "Frequency (Hz)", "color": "Amplitude (dB)"},
+#         fig.add_trace(
+#             go.Scattergl(
+#                 x=time_vals,
+#                 y=freq_vals,
+#                 mode="markers",
+#                 marker=dict(
+#                     size=point_size,
+#                     color=amp_vals,
+#                     colorscale=colormap,
+#                     showscale=True
+#                 )
+#             )
 #         )
-#         fig.update_traces(marker=dict(size=point_size))
 #     else:
-#         fig = go.Figure(
-#             data=go.Heatmap(
+#         fig.add_trace(
+#             go.Heatmap(
 #                 x=t,
 #                 y=f_sel,
 #                 z=S_db_sel,
 #                 colorscale=colormap,
-#                 colorbar=dict(title="Amplitude (dB)"),
+#                 colorbar=dict(title="Amplitude (dB)")
 #             )
 #         )
 
-#     # ---------- Dynamic plot titles ----------
+#     # Titles
 #     title_main = project_name if project_name else "Sonogram"
 #     title_sub = project_location if project_location else ""
 #     title_species = project_species if project_species else ""
@@ -219,37 +226,29 @@
 #         height=700,
 #         xaxis_title="Time (s)",
 #         yaxis_title="Frequency (Hz)",
-#         yaxis=dict(range=[f_min, f_max]),
 #     )
-#     fig = apply_saved_zoom(fig)
 
-#     st.plotly_chart(fig, use_container_width=True)
+#     # ---------------------------------------------------------
+#     # SHOW PLOT (ZOOM IS PRESERVED)
+#     # ---------------------------------------------------------
+#     st.plotly_chart(
+#         fig,
+#         use_container_width=True,
+#         config={"scrollZoom": True},
+#         key="main_plot"
+#     )
 
 import streamlit as st
 import numpy as np
 import soundfile as sf
 import io
 from scipy.signal import stft
-import plotly.express as px
-import plotly.graph_objects as go
-from streamlit_plotly_events import plotly_events
+import altair as alt
+import pandas as pd
 from help_text import HELP_TEXT
 
 st.set_page_config(layout="wide")
-st.title("Interactive Bat Sonogram – Pro Interface")
-
-# ---------------------------------------------------------
-# Helper: restore zoom
-# ---------------------------------------------------------
-def restore_zoom(fig):
-    zoom = st.session_state.get("zoom_state", None)
-    if zoom:
-        if "x" in zoom:
-            fig.update_xaxes(range=zoom["x"])
-        if "y" in zoom:
-            fig.update_yaxes(range=zoom["y"])
-    return fig
-
+st.title("Interactive Bat Sonogram – Pro Interface (Altair Edition)")
 
 # ---------------------------------------------------------
 # File upload
@@ -335,12 +334,10 @@ with col_controls:
             (15, 120)
         )
 
-        mode = st.radio("Display mode", ["Scatter", "Heatmap"], index=0)
+        mode = st.radio("Display mode", ["Scatter", "Density"], index=0)
 
         if mode == "Scatter":
             point_size = st.slider("Scatter point size", 1, 10, 2)
-        else:
-            point_size = None
 
         colormap = st.selectbox(
             "Colormap",
@@ -354,117 +351,91 @@ with col_controls:
         keep_top_percent = st.slider("Keep top (%) strongest points", 1, 50, 10)
 
 # ---------------------------------------------------------
-# RIGHT COLUMN – SONOGRAM (ZOOM-PRESERVING VERSION)
+# RIGHT COLUMN – SONOGRAM
 # ---------------------------------------------------------
 with col_plot:
 
-    # Compute STFT data (this can change)
+    # Extract chunk
     start_sample = int(chunk_start * sr)
     end_sample = int(chunk_end * sr)
     y_chunk = y[start_sample:end_sample]
 
+    # STFT
     f, t_local, Zxx = stft(y_chunk, fs=sr, nperseg=n_fft, noverlap=n_fft - hop)
     t = t_local + chunk_start
     S = np.abs(Zxx)
     S_db = 20 * np.log10(S + 1e-12)
 
+    # Frequency mask
     f_min = min_khz * 1000
     f_max = max_khz * 1000
     freq_mask = (f >= f_min) & (f <= f_max)
     f_sel = f[freq_mask]
     S_db_sel = S_db[freq_mask, :]
 
-    # Flatten for scatter
+    # Flatten
     T, F = np.meshgrid(t, f_sel)
-    time_vals = T.flatten()
-    freq_vals = F.flatten()
-    amp_vals = S_db_sel.flatten()
+    df = pd.DataFrame({
+        "time": T.flatten(),
+        "freq": F.flatten(),
+        "amp": S_db_sel.flatten()
+    })
 
-    # Amplitude filtering
-    amp_mask = amp_vals >= amp_cut
-    time_vals = time_vals[amp_mask]
-    freq_vals = freq_vals[amp_mask]
-    amp_vals = amp_vals[amp_mask]
+    # Amplitude filter
+    df = df[df["amp"] >= amp_cut]
 
-    # Keep top X%
-    perc = 100 - keep_top_percent
-    threshold = np.percentile(amp_vals, perc)
-    strong_mask = amp_vals >= threshold
-    time_vals = time_vals[strong_mask]
-    freq_vals = freq_vals[strong_mask]
-    amp_vals = amp_vals[strong_mask]
+    # Keep top %
+    threshold = np.percentile(df["amp"], 100 - keep_top_percent)
+    df = df[df["amp"] >= threshold]
 
     # Downsample
-    max_points = 200_000
-    if len(time_vals) > max_points:
-        idx = np.random.choice(len(time_vals), max_points, replace=False)
-        time_vals = time_vals[idx]
-        freq_vals = freq_vals[idx]
-        amp_vals = amp_vals[idx]
+    if len(df) > 200_000:
+        df = df.sample(200_000)
 
     # ---------------------------------------------------------
-    # FIGURE PERSISTENCE (THIS IS THE FIX)
+    # ALTAR CHARTS
     # ---------------------------------------------------------
-    if "fig" not in st.session_state:
-        st.session_state.fig = go.Figure()
-
-    fig = st.session_state.fig
-
-    # Clear previous traces but KEEP layout (keeps zoom)
-    fig.data = []
-
-    # Add new data
-    if mode == "Scatter":
-        fig.add_trace(
-            go.Scattergl(
-                x=time_vals,
-                y=freq_vals,
-                mode="markers",
-                marker=dict(
-                    size=point_size,
-                    color=amp_vals,
-                    colorscale=colormap,
-                    showscale=True
-                )
-            )
-        )
-    else:
-        fig.add_trace(
-            go.Heatmap(
-                x=t,
-                y=f_sel,
-                z=S_db_sel,
-                colorscale=colormap,
-                colorbar=dict(title="Amplitude (dB)")
-            )
-        )
 
     # Titles
     title_main = project_name if project_name else "Sonogram"
     title_sub = project_location if project_location else ""
     title_species = project_species if project_species else ""
 
-    fig.update_layout(
-        title=dict(
-            text=f"<b>{title_main}</b><br><sup>{title_sub}</sup><br><sup>{title_species}</sup>",
-            x=0.5,
-            xanchor="center"
-        ),
-        height=700,
-        xaxis_title="Time (s)",
-        yaxis_title="Frequency (Hz)",
-    )
+    full_title = f"{title_main}\n{title_sub}\n{title_species}"
 
-    # ---------------------------------------------------------
-    # SHOW PLOT (ZOOM IS PRESERVED)
-    # ---------------------------------------------------------
-    st.plotly_chart(
-        fig,
-        use_container_width=True,
-        config={"scrollZoom": True},
-        key="main_plot"
-    )
+    if mode == "Scatter":
+        chart = (
+            alt.Chart(df)
+            .mark_circle(size=point_size)
+            .encode(
+                x=alt.X("time:Q", title="Time (s)"),
+                y=alt.Y("freq:Q", title="Frequency (Hz)"),
+                color=alt.Color("amp:Q", scale=alt.Scale(scheme=colormap)),
+            )
+            .properties(height=700, title=full_title)
+            .interactive()
+        )
 
+    else:  # Density map
+        chart = (
+            alt.Chart(df)
+            .transform_density(
+                "freq",
+                "time",
+                as_=["freq", "density"],
+                groupby=["time"],
+            )
+            .mark_rect()
+            .encode(
+                x=alt.X("time:Q", title="Time (s)"),
+                y=alt.Y("freq:Q", title="Frequency (Hz)"),
+                color=alt.Color("density:Q", scale=alt.Scale(scheme=colormap)),
+            )
+            .properties(height=700, title=full_title)
+            .interactive()
+        )
+
+    st.altair_chart(chart, use_container_width=True)
 
 
 
