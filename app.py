@@ -12,7 +12,7 @@ from help_text import HELP_TEXT
 st.set_page_config(layout="wide")
 st.image("Copilot_20260604_011145.png",width = "stretch")
 
-@st.dialog(" ",width='large')
+@st.dialog(" ")
 def helper():   
     st.markdown(HELP_TEXT)
     
