@@ -11,7 +11,7 @@ from help_text import HELP_TEXT
 st.markdown(
     """
     <div style="text-align:center;">
-        <img src="Copilot_20260604_011145.png"
+        <img src="https://copilot.microsoft.com/th/id/BCO.da966806-3b81-419a-a7f4-b3b399793929.png"
              style="width:100%; max-width:900px;">
     </div>
     """,
