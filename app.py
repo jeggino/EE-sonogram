@@ -10,9 +10,38 @@ from help_text import HELP_TEXT
 
 
 
+# Replace with your image path or URL
+IMAGE_URL = "Copilot_20260604_011145.png"
+
+st.markdown(
+    f"""
+    <style>
+        /* Position container in the Streamlit toolbar */
+        .custom-toolbar-icon {{
+            position: fixed;
+            top: 12px;
+            right: 60px; /* adjust to move left/right */
+            z-index: 99999;
+        }}
+
+        .custom-toolbar-icon img {{
+            width: 28px;   /* icon size */
+            height: 28px;
+            border-radius: 4px;
+            cursor: pointer;
+        }}
+    </style>
+
+    <div class="custom-toolbar-icon">
+        <a href="https://your-link.com" target="_blank">
+            <img src="{IMAGE_URL}">
+        </a>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 st.set_page_config(layout="wide")
-st.image("Copilot_20260604_011145.png")
 
 # ---------------------------------------------------------
 # Helper: restore zoom
