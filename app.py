@@ -28,11 +28,12 @@ st.markdown(
             top: 0;
             left: 0;
             width: 100%;
-            height: 90px; /* adjust height */
+            height: 150px; /* increase until full image fits */
             background-image: url("{IMAGE_URL}");
-            background-size: cover;
+            background-size: contain;   /* <<< THIS SHOWS THE FULL IMAGE */
             background-position: center;
             background-repeat: no-repeat;
+            background-color: black;    /* optional: fill behind image */
             z-index: 0;
         }}
 
@@ -45,6 +46,7 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
 
 
 
