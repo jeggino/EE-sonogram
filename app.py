@@ -12,23 +12,9 @@ from help_text import HELP_TEXT
 st.set_page_config(layout="wide")
 st.image("Copilot_20260604_011145.png",width = "stretch")
 
-@st.dialog("App Instructions")
-def helper():
-    st.markdown(
-        """
-        <div style='
-            height: 70vh;
-            width: 100%;
-            overflow-y: scroll;
-            padding-right: 10px;
-        '>
-        """,
-        unsafe_allow_html=True
-    )
-    
+@st.dialog(" ",width='large')
+def helper():   
     st.markdown(HELP_TEXT)
-    
-    st.markdown("</div>", unsafe_allow_html=True)
     
 if st.button("ℹ️ How to use the app"):
     helper()
