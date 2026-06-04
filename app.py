@@ -28,7 +28,7 @@ st.markdown(
             top: 0;
             left: 0;
             width: 100%;
-            height: 100px; /* increase until full image fits */
+            height: 65px; /* increase until full image fits */
             background-image: url("{IMAGE_URL}");
             background-size: contain;   /* <<< THIS SHOWS THE FULL IMAGE */
             background-position: left;
