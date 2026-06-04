@@ -30,7 +30,8 @@ def helper():
     
     st.markdown("</div>", unsafe_allow_html=True)
     
-
+if st.button("ℹ️ How to use the app"):
+    helper()
 
 # ---------- File upload ----------
 uploaded_file = st.file_uploader("Upload ultrasonic audio", type=["wav", "flac", "mp3"])
@@ -46,8 +47,7 @@ if data.ndim > 1:
 y = data.astype(float)
 duration = len(y) / sr
 
-if st.button("ℹ️ How to use the app"):
-    helper()
+
 
 
 st.write(f"Sample rate: {sr} Hz, duration: {duration:.3f} s")
