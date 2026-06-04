@@ -6,8 +6,19 @@ from scipy.signal import stft
 import plotly.express as px
 import plotly.graph_objects as go
 
+from help_text import HELP_TEXT
+
+
 st.set_page_config(layout="wide")
 st.image("Copilot_20260604_011145.png",width = "stretch")
+
+if st.button("ℹ️ How to use the app"):
+    with st.dialog("App Instructions", width="80%", height="80%"):
+        st.markdown(
+            HELP_TEXT,
+            unsafe_allow_html=False,
+        )
+
 
 # ---------- File upload ----------
 uploaded_file = st.file_uploader("Upload ultrasonic audio", type=["wav", "flac", "mp3"])
