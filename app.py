@@ -8,18 +8,11 @@ import plotly.graph_objects as go
 from streamlit_plotly_events import plotly_events
 from help_text import HELP_TEXT
 
-st.markdown(
-    """
-    <div style="text-align:center;">
-        <img src="blob:https://copilot.microsoft.com/a94b2585-1488-40c4-a9f6-4868a939182d"
-             style="width:100%; max-width:900px;">
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+
 
 
 st.set_page_config(layout="wide")
+st.image("Copilot_20260604_011145.png")
 
 # ---------------------------------------------------------
 # Helper: restore zoom
