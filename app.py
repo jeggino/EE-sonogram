@@ -9,7 +9,7 @@ from streamlit_plotly_events import plotly_events
 from help_text import HELP_TEXT
 
 
-
+st.set_page_config(layout="wide")
 # Replace with your image path or URL
 IMAGE_URL = "Copilot_20260604_011145.png"
 
@@ -41,7 +41,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.set_page_config(layout="wide")
+
 
 # ---------------------------------------------------------
 # Helper: restore zoom
