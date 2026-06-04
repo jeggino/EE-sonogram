@@ -201,9 +201,15 @@ with col_plot:
                     color=amp_vals,
                     colorscale=colormap,
                     showscale=True
+                ),
+                hovertemplate=(
+                    "Time: %{x:.3f} s<br>"
+                    "Frequency: %{y:.1f} Hz<br>"
+                    "Amplitude: %{marker.color:.2f}<extra></extra>"
                 )
             )
         )
+
     else:
         fig.add_trace(
             go.Heatmap(
