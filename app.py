@@ -11,7 +11,7 @@ from help_text import HELP_TEXT
 st.markdown(
     """
     <div style="text-align:center;">
-        <img src="https://raw.githubusercontent.com/yourusername/yourrepo/main/header.png"
+        <img src="Copilot_20260604_011145.png"
              style="width:100%; max-width:900px;">
     </div>
     """,
