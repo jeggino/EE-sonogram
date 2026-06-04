@@ -18,7 +18,7 @@ st.image("Copilot_20260604_011145.png")
 # Helper: restore zoom
 # ---------------------------------------------------------
 
-@st.dialog(" "):
+@st.dialog(" ")
 def helper():
     st.markdown(HELP_TEXT)
 
