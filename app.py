@@ -15,6 +15,20 @@ st.image("Copilot_20260604_011145.png",width = "stretch")
 @st.dialog(" ")
 def helper():   
     st.markdown(HELP_TEXT)
+
+
+def apply_saved_zoom(fig):
+    if "zoom_state" in st.session_state:
+        zoom = st.session_state.zoom_state
+
+        if "xaxis.range[0]" in zoom and "xaxis.range[1]" in zoom:
+            fig.update_xaxes(range=[zoom["xaxis.range[0]"], zoom["xaxis.range[1]"]])
+
+        if "yaxis.range[0]" in zoom and "yaxis.range[1]" in zoom:
+            fig.update_yaxes(range=[zoom["yaxis.range[0]"], zoom["yaxis.range[1]"]])
+
+    return fig
+
     
 if st.button("ℹ️ How to use the app"):
     helper()
@@ -209,6 +223,7 @@ with col_plot:
         yaxis_title="Frequency (Hz)",
         yaxis=dict(range=[f_min, f_max]),
     )
+    fig = apply_saved_zoom(fig)
 
     st.plotly_chart(fig, use_container_width=True)
 
