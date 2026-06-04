@@ -17,6 +17,13 @@ st.image("Copilot_20260604_011145.png")
 # ---------------------------------------------------------
 # Helper: restore zoom
 # ---------------------------------------------------------
+
+@st.dialog(" "):
+def helper():
+    st.markdown(HELP_TEXT)
+
+
+
 def restore_zoom(fig):
     zoom = st.session_state.get("zoom_state", None)
     if zoom:
@@ -74,13 +81,8 @@ with col_controls:
 
     # Help dialog
     if st.button("ℹ️ How to use the app"):
-        with st.dialog("App Instructions"):
-            st.markdown(
-                "<div style='height:70vh; overflow-y:auto; padding-right:12px;'>",
-                unsafe_allow_html=True
-            )
-            st.markdown(HELP_TEXT)
-            st.markdown("</div>", unsafe_allow_html=True)
+        helper()
+
 
     # Metadata
     with st.expander("📄 Project metadata", expanded=True):
