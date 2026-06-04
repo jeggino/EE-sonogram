@@ -114,7 +114,7 @@ with col_controls:
         mode = st.radio("Display mode", ["Scatter", "Heatmap"], index=0)
 
         if mode == "Scatter":
-            point_size = st.slider("Scatter point size", 1, 10, 2)
+            point_size = st.slider("Scatter point size", 1, 10, 4)
         else:
             point_size = None
 
@@ -127,7 +127,7 @@ with col_controls:
     # Amplitude filtering
     with st.expander("🔊 Amplitude filtering", expanded=True):
         amp_cut = st.slider("Minimum amplitude (dB)", -120, 0, -80)
-        keep_top_percent = st.slider("Keep top (%) strongest points", 1, 50, 10)
+        keep_top_percent = st.slider("Keep top (%) strongest points", 1, 70, 50)
 
 # ---------------------------------------------------------
 # RIGHT COLUMN – SONOGRAM (ZOOM-PRESERVING VERSION)
