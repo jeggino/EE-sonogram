@@ -11,7 +11,7 @@ from help_text import HELP_TEXT
 
 st.set_page_config(layout="wide")
 # Replace with your image path or URL
-IMAGE_URL = "https://github.com/jeggino/EE-sonogram/blob/1db23a769f70a41f01e2c08345018ee336c5fb1f/Copilot_20260604_011145.png"
+IMAGE_URL = "https://raw.githubusercontent.com/jeggino/EE-sonogram/1db23a769f70a41f01e2c08345018ee336c5fb1f/Copilot_20260604_011145.png"
 
 st.markdown(
     f"""
