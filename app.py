@@ -16,27 +16,20 @@ IMAGE_URL = "Copilot_20260604_011145.png"
 st.markdown(
     f"""
     <style>
-        /* Position container in the Streamlit toolbar */
-        .custom-toolbar-icon {{
-            position: fixed;
-            top: 12px;
-            right: 60px; /* adjust to move left/right */
-            z-index: 99999;
+        /* Target the Streamlit top toolbar */
+        [data-testid="stToolbar"] {{
+            background-image: url("{IMAGE_URL}");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            height: 60px !important; /* adjust depending on your image */
         }}
 
-        .custom-toolbar-icon img {{
-            width: 28px;   /* icon size */
-            height: 28px;
-            border-radius: 4px;
-            cursor: pointer;
+        /* Optional: hide Streamlit's default gradient */
+        header[data-testid="stHeader"] {{
+            background: transparent;
         }}
     </style>
-
-    <div class="custom-toolbar-icon">
-        <a href="https://your-link.com" target="_blank">
-            <img src="{IMAGE_URL}">
-        </a>
-    </div>
     """,
     unsafe_allow_html=True
 )
